@@ -3,14 +3,17 @@ const bodyParser = require('body-parser');
 const mongoose=require('mongoose')
 const Dishes=require('../Models/dishModel')
 const dishRouter = express.Router();
-
+const adminAuth=require('../Auth/admin-Auth')
 dishRouter.use(bodyParser.json());
+const auth=require('../Auth/passportJwt')
 
+const cors=require('./cors')
 //#region routing Dishes
-dishRouter.route('/')
-.get((req,res) => {
+dishRouter.route('/').
+options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+.get((req,res,next) => {
     
-    Dishes.find({}).then(Dishes=>{
+    Dishes.find({}).populate('comments.author').then(Dishes=>{
         console.log('Dishes Retrived Successfully')
         res.setHeader('Content-Type','application/json')
         res.json(Dishes)
@@ -18,7 +21,7 @@ dishRouter.route('/')
         console.log(err)
     })
 })
-.post((req, res) => {
+.post(cors.corsWithOptions,auth.verifyUser,(req, res) => {
 
     Dishes.create(req.body).then(Dish=>{
 
@@ -30,11 +33,11 @@ dishRouter.route('/')
     })
     
 })
-.put((req, res, next) => {
+.put(cors.corsWithOptions,auth.verifyUser,adminAuth.verifyAdmin,(req, res, next) => {
     res.statusCode = 403;
     res.end('PUT operation not supported on /dishes');
 })
-.delete((req, res) => {
+.delete(cors.corsWithOptions,auth.verifyUser,adminAuth.verifyAdmin,(req, res) => {
     res.end('Deleting all dishes');
 
     Dishes.remove({}).then(res=>{
@@ -51,7 +54,7 @@ dishRouter.route('/')
 
 //#region routing Dishes/:dishId
 dishRouter.route('/:dishId')
-
+.options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
 .get((req,res)=>{
     
 
@@ -66,11 +69,11 @@ dishRouter.route('/:dishId')
    })
    
 })
-.post((req,res)=>{
+.post(cors.corsWithOptions,auth.verifyUser,adminAuth.verifyAdmin,(req,res)=>{
     res.statusCode = 403;
     res.end('POST operation not supported on /dishes/'+ req.params.dishId);
 })
-.put((req,res)=>{
+.put(cors.corsWithOptions,auth.verifyUser,adminAuth.verifyAdmin,(req,res)=>{
 
     Dishes.findByIdAndUpdate(req.params.dishId,{$set:req.body},{new:true}).
     then(Dish=>{
@@ -81,7 +84,7 @@ dishRouter.route('/:dishId')
 })
 
 
-.delete((req,res)=>{
+.delete(cors.corsWithOptions,auth.verifyUser,adminAuth.verifyAdmin,(req,res)=>{
 Dishes.findByIdAndDelete(req.params.dishId).then(resp=>{
     console.log(resp)
     res.end('Will delete the dish of id '+req.params.dishId)
@@ -95,7 +98,7 @@ Dishes.findByIdAndDelete(req.params.dishId).then(resp=>{
 //#region routing Dishes/:dishId/comments
 
 dishRouter.route('/:dishId/comments')
-
+.options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
 .get((req,res)=>{
     
 
@@ -122,22 +125,22 @@ dishRouter.route('/:dishId/comments')
    })
    
 })
-.post((req,res)=>{
+.post(cors.corsWithOptions,auth.verifyUser, (req,res)=>{
     
    
     Dishes.findById(req.params.dishId).then(Dish=>{
         if(Dish!=null)
         {
-            const comments=req.body
-
-            for(let i=0;i<comments.length;i++)
-            {
-                Dish.comments.push(comments[i])
-                
-            }
-            Dish.save()
-            res.statusCode=200
-            res.end('New Comments Of Dish added Successfully')
+            req.body.author=req.user._id;
+           // const comments=req.body
+            Dish.comments.push(req.body)
+            Dish.save().then(dish=>{
+                res.statusCode=200
+                res.json({result:'New Comments Of Dish added Successfully',DishAdded:Dish})
+            }).catch(err=>{
+                console.log(err)
+            })
+         
         }
         else{
             res.statusCode=404
@@ -147,7 +150,7 @@ dishRouter.route('/:dishId/comments')
   
 
 })
-.put((req,res)=>{
+.put(cors.corsWithOptions,auth.verifyUser,adminAuth.verifyAdmin,(req,res)=>{
 
     res.statusCode = 403;
     res.end('PUT operation not supported on /dishes/'
@@ -155,7 +158,7 @@ dishRouter.route('/:dishId/comments')
 })
 
 
-.delete((req, res, next) => {
+.delete(cors.corsWithOptions,auth.verifyUser,adminAuth.verifyAdmin,(req, res, next) => {
     Dishes.findById(req.params.dishId)
     .then((dish) => {
         if (dish != null) {
@@ -186,6 +189,7 @@ dishRouter.route('/:dishId/comments')
 //#region routing Dishes/:dishId/comments/commentId
 
 dishRouter.route('/:dishId/comments/:commentId')
+.options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
 .get((req,res,next) => {
     Dishes.findById(req.params.dishId)
     .then((dish) => {
@@ -207,21 +211,43 @@ dishRouter.route('/:dishId/comments/:commentId')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.post((req, res, next) => {
+
+.post(cors.corsWithOptions,auth.verifyUser,(req, res, next) => {
     res.statusCode = 403;
     res.end('POST operation not supported on /dishes/'+ req.params.dishId
         + '/comments/' + req.params.commentId);
 })
-.put((req, res, next) => {
+.put(cors.corsWithOptions,auth.verifyUser,(req, res, next) => {
+
+    if(req.user.adminRole===true)
+    {
+        res.statusCode=403
+        res.json({status:'failure',result:'You are not allowed to perform operation on this page'})
+    }
+    else{
     Dishes.findById(req.params.dishId)
     .then((dish) => {
         if (dish != null && dish.comments.id(req.params.commentId) != null) {
+
+            console.log('user id '+req.user._id)
+            console.log('comment user id '+dish.comments.id(req.params.commentId).author._id)
+             if(!req.user._id.equals(dish.comments.id(req.params.commentId).author._id))
+             {
+            
+                res.statusCode=403
+                res.json({status:'failure',result:'You are not allowed to perform operation on this page'})
+             }
+
+             
             if (req.body.rating) {
                 dish.comments.id(req.params.commentId).rating = req.body.rating;
             }
             if (req.body.comment) {
                 dish.comments.id(req.params.commentId).comment = req.body.comment;                
             }
+        
+      
+
             dish.save()
             .then((dish) => {
                 res.statusCode = 200;
@@ -241,11 +267,27 @@ dishRouter.route('/:dishId/comments/:commentId')
         }
     }, (err) => next(err))
     .catch((err) => next(err));
+}
 })
-.delete((req, res, next) => {
+.delete(cors.corsWithOptions,auth.verifyUser,(req, res, next) => {
+
+    if(req.user.adminRole===true)
+    {
+        res.statusCode=403
+        res.json({status:'failure',result:'You are not allowed to perform operation on this page'})
+    }
+
+
     Dishes.findById(req.params.dishId)
     .then((dish) => {
         if (dish != null && dish.comments.id(req.params.commentId) != null) {
+            if(!req.user._id.equals(dish.comments.id(req.params.commentId).author._id))
+            {
+           
+               res.statusCode=403
+               res.json({status:'failure',result:'You are not allowed to perform operation on this page'})
+            }
+
             dish.comments.id(req.params.commentId).remove();
             dish.save()
             .then((dish) => {

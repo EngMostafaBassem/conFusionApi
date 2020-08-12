@@ -4,7 +4,8 @@ const promoRouter=express.Router()
 const bodyParser = require('body-parser');
 promoRouter.use(bodyParser.json());
 
-
+const authUser=require('../Auth/passportJwt')
+const authAdmin=require('../Auth/admin-Auth')
 
 
 const Promotions=require('../Models/promotionModel')
@@ -25,7 +26,7 @@ promoRouter.route('/').
     })
    
 })
-.post((req,res)=>{
+.post(authUser.verifyUser,authAdmin.verifyAdmin,(req,res)=>{
     Promotions.create(req.body).then(promotion=>{
         console.log('New Promotion has been added Successfully'+promotion)
         res.setHeader('Content-Type','application/json')
@@ -35,11 +36,11 @@ promoRouter.route('/').
         console.log(err)
     })
 })
-.put((req,res)=>{
+.put(authUser.verifyUser,authAdmin.verifyAdmin,(req,res)=>{
     res.statusCode=403
     res.send('No updates in promotions are allowed!!!')
 })
-.delete((req,res,next)=>{
+.delete(authUser.verifyUser,authAdmin.verifyAdmin,(req,res,next)=>{
 
     Promotions.remove({}).then(resp=>{
         console.log('Info about deleted Promotion '+res)
@@ -70,10 +71,10 @@ promoRouter.route('/:promoId')
         console.log(err)
     })
 })
-.post((req,res,next)=>{
+.post(authUser.verifyUser,authAdmin.verifyAdmin,(req,res,next)=>{
     res.end('Will add  the promotion of id  '+req.params.promoId)
 })
-. put((req,res,next)=>{
+. put(authUser.verifyUser,authAdmin.verifyAdmin,(req,res,next)=>{
 
     Promotions.findByIdAndUpdate(req.params.promoId,{$set:req.body},{new:true}).then(promo=>{
         res.statusCode=200
@@ -85,7 +86,7 @@ promoRouter.route('/:promoId')
 
     
 })
-.delete((req,res,next)=>{
+.delete(authUser.verifyUser,authAdmin.verifyAdmin,(req,res,next)=>{
 
     Promotions.findByIdAndDelete(req.params.promoId).then(resp=>{
         console.log(resp)

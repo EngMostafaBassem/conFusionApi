@@ -3,6 +3,8 @@ const leaderRouter=express.Router()
 
 const bodyParser = require('body-parser');
 leaderRouter.use(bodyParser.json());
+const authUser=require('../Auth/passportJwt')
+const authAdmin=require('../Auth/admin-Auth')
 const Leaders=require('../Models/leaderModel')
 
 //#region  route with /
@@ -22,7 +24,7 @@ leaderRouter.route('/').
     })
    
 })
-.post((req,res)=>{
+.post(authUser.verifyUser,authAdmin.verifyAdmin, (req,res)=>{
     Leaders.create(req.body).then(leaders=>{
         console.log('New leader has been added Successfully'+leaders)
         res.setHeader('Content-Type','application/json')
@@ -32,11 +34,11 @@ leaderRouter.route('/').
         console.log(err)
     })
 })
-.put((req,res)=>{
+.put(authUser.verifyUser,authAdmin.verifyAdmin, (req,res)=>{
     res.statusCode=403
     res.send('No updates in leaders are allowed!!!')
 })
-.delete((req,res,next)=>{
+.delete(authUser.verifyUser,authAdmin.verifyAdmin, (req,res,next)=>{
 
     Leaders.remove({}).then(resp=>{
         console.log('Info about deleted leader '+res)
@@ -69,10 +71,10 @@ leaderRouter.route('/:leaderId')
         console.log(err)
     })
 })
-.post((req,res,next)=>{
+.post(authUser.verifyUser,authAdmin.verifyAdmin, (req,res,next)=>{
     res.end('Will add  the leader of id  '+req.params.leaderId)
 })
-. put((req,res,next)=>{
+. put(authUser.verifyUser,authAdmin.verifyAdmin, (req,res,next)=>{
 
     Leaders.findByIdAndUpdate(req.params.leaderId,{$set:req.body},{new:true}).then(leader=>{
         res.statusCode=200     
@@ -83,7 +85,7 @@ leaderRouter.route('/:leaderId')
 
     
 })
-.delete((req,res,next)=>{
+.delete(authUser.verifyUser,authAdmin.verifyAdmin, (req,res,next)=>{
 
     Leaders.findByIdAndDelete(req.params.leaderId).then(resp=>{
         console.log(resp)
